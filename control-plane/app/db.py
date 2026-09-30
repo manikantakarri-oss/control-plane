@@ -72,6 +72,8 @@ def make_engine(cfg: Settings):
             max_overflow=5,
         )
     url = cfg.database_url
+    if not url:
+        raise RuntimeError("set DATABASE_URL (a Postgres URL) or LAKEBASE_INSTANCE")
     if url.startswith("sqlite"):
         # Tests use an in-memory database; StaticPool keeps every session on
         # the same connection so that database is actually shared.

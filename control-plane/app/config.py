@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,7 +17,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     environment: str = Field("development", description="development | production")
-    database_url: str = "postgresql+psycopg://controlplane:controlplane@localhost:5432/controlplane"
+    # SQLAlchemy URL, e.g. postgresql+psycopg://user:pass@host:5432/db. Required
+    # unless LAKEBASE_INSTANCE is set; docker-compose.yml / .env.example supply
+    # one for local development.
+    database_url: str = ""
     # When hosted as a Databricks App: the Lakebase instance to use instead of
     # DATABASE_URL. Credentials are short-lived OAuth tokens minted for the
     # app's own identity, so there is no database password to manage.
@@ -54,6 +57,13 @@ class Settings(BaseSettings):
     @property
     def deploys_enabled(self) -> bool:
         return bool(self.github_repo and self.github_token)
+
+    @field_validator("github_token")
+    @classmethod
+    def _placeholder_means_unset(cls, v: str) -> str:
+        # Databricks secrets cannot be empty, so a scope that has no token yet
+        # holds the placeholder "unset".
+        return "" if v.strip().lower() in ("", "unset") else v.strip()
 
     @model_validator(mode="after")
     def _require_secrets_in_production(self) -> Settings:

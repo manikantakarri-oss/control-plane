@@ -85,8 +85,9 @@ if [ -n "${GITHUB_DISPATCH_TOKEN:-}" ]; then
 else
   case " $keys " in
     *" github-token "*) echo "    github-token: exists" ;;
-    # An empty value keeps the app deployable with deploys switched off.
-    *) put github-token ""; echo "    github-token: empty - deploys from the Control Plane are disabled until set" ;;
+    # Secrets cannot be empty; the Control Plane reads "unset" as no token,
+    # which keeps the app deployable with deploys switched off.
+    *) put github-token unset; echo "    github-token: unset - deploys from the Control Plane are disabled until set" ;;
   esac
 fi
 

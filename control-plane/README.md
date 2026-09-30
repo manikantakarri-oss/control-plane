@@ -55,7 +55,7 @@ before it reaches this service.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `ENVIRONMENT` | `development` | `production` disables `/docs` and enforces the checks below |
-| `DATABASE_URL` | local Postgres | SQLAlchemy URL, e.g. `postgresql+psycopg://user:pass@host:5432/db`; SQLite is refused in production |
+| `DATABASE_URL` | *(required)* unless `LAKEBASE_INSTANCE` | SQLAlchemy URL, e.g. `postgresql+psycopg://user:pass@host:5432/db`; SQLite is refused in production |
 | `LAKEBASE_INSTANCE` | *(empty)* | use this Lakebase instance instead of `DATABASE_URL` (Databricks App hosting) |
 | `LAKEBASE_DATABASE` | `databricks_postgres` | |
 | `AUTO_MIGRATE` | `false` | run Alembic migrations at startup (set by the Databricks bundle) |
