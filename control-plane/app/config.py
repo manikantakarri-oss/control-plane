@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # app's own identity, so there is no database password to manage.
     lakebase_instance: str = ""
     lakebase_database: str = "databricks_postgres"
+    # Postgres schema holding the Control Plane's tables; created by the first
+    # migration if missing. Empty = the connection's default (usually public).
+    # Needed on Lakebase, where the app may create schemas but not write to
+    # public (Postgres 15+ default privileges).
+    database_schema: str = Field("", pattern=r"^([a-z_][a-z0-9_]{0,62})?$")
     # Apply Alembic migrations when the app starts (Databricks Apps has no
     # separate release step). The container entrypoint migrates on its own.
     auto_migrate: bool = False

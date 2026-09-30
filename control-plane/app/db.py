@@ -4,7 +4,7 @@ import threading
 import time
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -60,10 +60,24 @@ class _LakebaseConnector:
         )
 
 
+def _use_schema(engine, schema: str) -> None:
+    """Point every new connection at `schema`. Set in autocommit so a later
+    transaction rollback cannot undo it (plain SET is transactional)."""
+
+    @event.listens_for(engine, "connect")
+    def _set_search_path(dbapi_conn, _record):
+        previous = dbapi_conn.autocommit
+        dbapi_conn.autocommit = True
+        try:
+            dbapi_conn.execute(f'SET search_path TO "{schema}"')
+        finally:
+            dbapi_conn.autocommit = previous
+
+
 def make_engine(cfg: Settings):
     if cfg.lakebase_instance:
         connector = _LakebaseConnector(cfg.lakebase_instance, cfg.lakebase_database)
-        return create_engine(
+        engine = create_engine(
             "postgresql+psycopg://",
             creator=connector.connect,
             pool_pre_ping=True,
@@ -71,17 +85,21 @@ def make_engine(cfg: Settings):
             pool_size=5,
             max_overflow=5,
         )
-    url = cfg.database_url
-    if not url:
-        raise RuntimeError("set DATABASE_URL (a Postgres URL) or LAKEBASE_INSTANCE")
-    if url.startswith("sqlite"):
-        # Tests use an in-memory database; StaticPool keeps every session on
-        # the same connection so that database is actually shared.
-        kwargs = {"connect_args": {"check_same_thread": False}}
-        if ":memory:" in url:
-            kwargs["poolclass"] = StaticPool
-        return create_engine(url, **kwargs)
-    return create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=10)
+    else:
+        url = cfg.database_url
+        if not url:
+            raise RuntimeError("set DATABASE_URL (a Postgres URL) or LAKEBASE_INSTANCE")
+        if url.startswith("sqlite"):
+            # Tests use an in-memory database; StaticPool keeps every session on
+            # the same connection so that database is actually shared.
+            kwargs = {"connect_args": {"check_same_thread": False}}
+            if ":memory:" in url:
+                kwargs["poolclass"] = StaticPool
+            return create_engine(url, **kwargs)
+        engine = create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=10)
+    if cfg.database_schema:
+        _use_schema(engine, cfg.database_schema)
+    return engine
 
 
 engine = make_engine(get_settings())

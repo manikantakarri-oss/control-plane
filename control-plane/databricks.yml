@@ -21,6 +21,9 @@ variables:
   lakebase_instance:
     description: Lakebase instance holding the Control Plane database
     default: control-plane-db
+  database_schema:
+    description: Postgres schema for the Control Plane's tables (created on first start)
+    default: control_plane
   lakebase_capacity:
     description: Lakebase compute size (CU_1 is the smallest)
     default: CU_1
@@ -66,6 +69,10 @@ resources:
             value: production
           - name: LAKEBASE_INSTANCE
             value: ${var.lakebase_instance}
+          # The app may create schemas on Lakebase but not write to public, so
+          # it keeps its tables in a schema it creates and owns.
+          - name: DATABASE_SCHEMA
+            value: ${var.database_schema}
           # Databricks Apps has no separate release step, so migrate on start.
           # Tables are created by the app's own identity, which therefore owns them.
           - name: AUTO_MIGRATE

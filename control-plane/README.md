@@ -58,6 +58,7 @@ before it reaches this service.
 | `DATABASE_URL` | *(required)* unless `LAKEBASE_INSTANCE` | SQLAlchemy URL, e.g. `postgresql+psycopg://user:pass@host:5432/db`; SQLite is refused in production |
 | `LAKEBASE_INSTANCE` | *(empty)* | use this Lakebase instance instead of `DATABASE_URL` (Databricks App hosting) |
 | `LAKEBASE_DATABASE` | `databricks_postgres` | |
+| `DATABASE_SCHEMA` | *(empty)* | schema for the tables, created on first migration; the Databricks bundle uses `control_plane` |
 | `AUTO_MIGRATE` | `false` | run Alembic migrations at startup (set by the Databricks bundle) |
 | `ADMIN_API_KEY` | *(empty)* | required, ≥ 32 chars, in production; empty means the admin API rejects everything |
 | `HEARTBEAT_STALE_SECONDS` | `300` | |
