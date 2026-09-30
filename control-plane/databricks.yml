@@ -77,11 +77,11 @@ resources:
           # Tables are created by the app's own identity, which therefore owns them.
           - name: AUTO_MIGRATE
             value: "true"
-          - name: GITHUB_REPO
+          - name: DEPLOY_GITHUB_REPO
             value: ${var.github_repo}
           - name: ADMIN_API_KEY
             value_from: admin-api-key
-          - name: GITHUB_TOKEN
+          - name: DEPLOY_GITHUB_TOKEN
             value_from: github-token
       resources:
         - name: database

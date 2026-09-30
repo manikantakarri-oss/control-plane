@@ -65,5 +65,5 @@ def test_auto_migrate_on_startup(tmp_path, monkeypatch):
 def test_unset_github_token_placeholder_disables_deploys():
     from app.config import Settings
 
-    assert not Settings(github_repo="o/r", github_token="unset").deploys_enabled
-    assert Settings(github_repo="o/r", github_token="real").deploys_enabled
+    assert not Settings(DEPLOY_GITHUB_REPO="o/r", DEPLOY_GITHUB_TOKEN="unset").deploys_enabled
+    assert Settings(DEPLOY_GITHUB_REPO="o/r", DEPLOY_GITHUB_TOKEN="real").deploys_enabled

@@ -116,7 +116,7 @@ class HeartbeatAck(BaseModel):
 
 class DeployRequest(BaseModel):
     mode: DeployMode = DeployMode.upgrade
-    # Git ref to deploy; defaults to GITHUB_REF (usually main). A tag pins a release.
+    # Git ref to deploy; defaults to DEPLOY_GITHUB_REF (usually main). A tag pins a release.
     ref: str | None = Field(None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
     # Stop + start the app afterwards; needed after a user_api_scopes change.
     restart: bool = False

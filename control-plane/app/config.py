@@ -14,6 +14,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # No populate_by_name: that would also read the unprefixed GITHUB_* names.
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     environment: str = Field("development", description="development | production")
@@ -44,13 +45,15 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Deploys are executed by GitHub Actions (.github/workflows/deploy-customer.yml);
-    # the Control Plane only dispatches them. GITHUB_TOKEN needs "Actions: write"
-    # on GITHUB_REPO and nothing else. Leave unset to disable the deploy API.
-    github_repo: str = Field("", description="owner/name")
-    github_token: str = ""
-    github_workflow: str = "deploy-customer.yml"
-    github_ref: str = "main"
-    github_api_url: str = "https://api.github.com"
+    # the Control Plane only dispatches them. DEPLOY_GITHUB_TOKEN needs "Actions:
+    # write" on DEPLOY_GITHUB_REPO and nothing else. Leave unset to disable the
+    # deploy API. Prefixed because GitHub Actions itself sets GITHUB_REF,
+    # GITHUB_WORKFLOW, GITHUB_TOKEN and GITHUB_API_URL with other meanings.
+    github_repo: str = Field("", validation_alias="DEPLOY_GITHUB_REPO", description="owner/name")
+    github_token: str = Field("", validation_alias="DEPLOY_GITHUB_TOKEN")
+    github_workflow: str = Field("deploy-customer.yml", validation_alias="DEPLOY_GITHUB_WORKFLOW")
+    github_ref: str = Field("main", validation_alias="DEPLOY_GITHUB_REF")
+    github_api_url: str = Field("https://api.github.com", validation_alias="DEPLOY_GITHUB_API_URL")
     # A run still requested/running after this long is assumed lost and no
     # longer blocks a new deploy of the same deployment.
     deploy_run_timeout_seconds: int = 3600

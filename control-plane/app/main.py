@@ -300,7 +300,7 @@ def request_deploy(
     first install). Returns at once; follow progress on the returned run."""
     if not cfg.deploys_enabled:
         raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE, "deploys are not configured (GITHUB_REPO/GITHUB_TOKEN)"
+            status.HTTP_503_SERVICE_UNAVAILABLE, "deploys are not configured (DEPLOY_GITHUB_REPO/DEPLOY_GITHUB_TOKEN)"
         )
     d = _get_deployment(db, deployment_id)
     if d.status == "decommissioned":

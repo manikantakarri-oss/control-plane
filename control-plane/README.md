@@ -65,10 +65,10 @@ before it reaches this service.
 | `LOG_LEVEL` | `INFO` | |
 | `WEB_CONCURRENCY` | `2` | uvicorn workers (container only) |
 | `SKIP_MIGRATIONS` | `0` | set `1` if migrations run as a separate release step |
-| `GITHUB_REPO` | *(empty)* | `owner/name` of this repository; with `GITHUB_TOKEN`, enables the deploy API |
-| `GITHUB_TOKEN` | *(empty)* | fine-grained token, this repo only, **Actions: Read and write** only |
-| `GITHUB_WORKFLOW` | `deploy-customer.yml` | |
-| `GITHUB_REF` | `main` | default ref to deploy |
+| `DEPLOY_GITHUB_REPO` | *(empty)* | `owner/name` of this repository; with `DEPLOY_GITHUB_TOKEN`, enables the deploy API |
+| `DEPLOY_GITHUB_TOKEN` | *(empty)* | fine-grained token, this repo only, **Actions: Read and write** only |
+| `DEPLOY_GITHUB_WORKFLOW` | `deploy-customer.yml` | |
+| `DEPLOY_GITHUB_REF` | `main` | default ref to deploy |
 | `DEPLOY_RUN_TIMEOUT_SECONDS` | `3600` | an unfinished run stops blocking new deploys after this |
 
 Generate an admin key with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
