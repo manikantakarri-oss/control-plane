@@ -1,0 +1,76 @@
+# Deploys the Data Plane (Agent Portal) into a customer's Databricks workspace.
+#
+# The workspace is chosen by the CLI profile, never hard-coded here, so the
+# same bundle deploys to any customer:
+#
+#   databricks bundle deploy -t customer -p <customer-profile> \
+#     --var app_name=agent-portal --var secret_scope=agent-portal
+#
+# scripts/onboard-customer.sh wraps the full sequence (register with the
+# Control Plane, write secrets, deploy, restart).
+
+bundle:
+  name: agent-portal
+
+variables:
+  app_name:
+    description: Databricks App name in the customer workspace
+    default: agent-portal
+  secret_scope:
+    description: Customer-owned secret scope holding the Control Plane credentials
+    default: agent-portal
+
+# Only the portal's runtime files go to the workspace.
+sync:
+  exclude:
+    - .github/**
+    - control-plane/**
+    - scripts/**
+    - data-plane/ui/**
+    - data-plane/tests/**
+    - data-plane/scripts/**
+    - "**/*.md"
+    - "**/__pycache__/**"
+
+resources:
+  apps:
+    agent_portal:
+      name: ${var.app_name}
+      description: Agent Portal - a front door to this workspace's Databricks agents
+      source_code_path: ./data-plane
+      # Applied to the app record (app.yaml scopes are not reliably honoured).
+      # Scope names are <api-group>.<resource>; the app must be restarted after
+      # any change or the runtime keeps minting tokens with the old set.
+      user_api_scopes:
+        - serving.serving-endpoints
+        - model-serving
+        - sql.statement-execution
+        - sql.warehouses
+        - dashboards.genie
+        - catalog.catalogs
+        - catalog.schemas
+        - catalog.tables
+        - vectorsearch.vector-search-endpoints
+        - files.files
+        - workspace.workspace
+      # Referenced by app.yaml `valueFrom`. Secret ACLs are per scope, so the
+      # app's service principal gets READ on the whole scope: keep nothing else
+      # in it.
+      resources:
+        - name: control-plane
+          secret:
+            scope: ${var.secret_scope}
+            key: control-plane
+            permission: READ
+
+targets:
+  # Your own workspace, deployed as your identity with a dev- name prefix.
+  dev:
+    mode: development
+    default: true
+
+  # A customer workspace. One copy per workspace, at a fixed path.
+  customer:
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}

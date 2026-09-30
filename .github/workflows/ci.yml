@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  control-plane:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: control-plane
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+      - run: docker build -t control-plane:ci .
+
+  data-plane:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: data-plane
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: pytest -q
+
+  ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: data-plane/ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: data-plane/ui/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  bundle-validate:
+    runs-on: ubuntu-latest
+    needs: [data-plane]
+    # Needs a service principal for a reference workspace. Skipped until the
+    # repository variable DATABRICKS_BUNDLE_VALIDATE is set to "true" and the
+    # three DATABRICKS_* secrets below are configured.
+    if: ${{ vars.DATABRICKS_BUNDLE_VALIDATE == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - run: databricks bundle validate -t customer
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}

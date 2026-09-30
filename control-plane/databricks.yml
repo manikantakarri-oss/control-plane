@@ -1,0 +1,109 @@
+# Hosts the Control Plane as a Databricks App in the PROVIDER workspace, with a
+# Lakebase (managed Postgres) instance as its database.
+#
+# The workspace is chosen by CLI profile, never hard-coded:
+#
+#   databricks bundle deploy -t prod -p <provider-profile> \
+#     --var github_repo=<owner/repo> \
+#     --var deployer_sp=<application-id> --var heartbeat_sp=<application-id>
+#   databricks bundle run control_plane -t prod -p <provider-profile>
+#
+# scripts/setup-provider.sh does all of this, including the service principals
+# and secrets, and prints what to put in GitHub.
+
+bundle:
+  name: control-plane
+
+variables:
+  app_name:
+    description: Databricks App name for the Control Plane
+    default: control-plane
+  lakebase_instance:
+    description: Lakebase instance holding the Control Plane database
+    default: control-plane-db
+  lakebase_capacity:
+    description: Lakebase compute size (CU_1 is the smallest)
+    default: CU_1
+  secret_scope:
+    description: Scope holding admin-api-key and github-token (nothing else)
+    default: control-plane
+  github_repo:
+    description: owner/name of the repository whose deploy workflow the Control Plane dispatches
+  deployer_sp:
+    description: Application id of the service principal GitHub Actions calls the Control Plane as
+  heartbeat_sp:
+    description: Application id of the service principal customer portals send heartbeats as
+
+sync:
+  exclude:
+    - tests/**
+    - Dockerfile
+    - docker-compose.yml
+    - docker-entrypoint.sh
+    - .dockerignore
+    - .env*
+    - "*.md"
+
+resources:
+  database_instances:
+    control_plane_db:
+      name: ${var.lakebase_instance}
+      capacity: ${var.lakebase_capacity}
+      # Holds every customer and deployment record: never delete it by way of
+      # a bundle change. Remove this line deliberately if it must go.
+      lifecycle:
+        prevent_destroy: true
+
+  apps:
+    control_plane:
+      name: ${var.app_name}
+      description: Agentic AI Platform - Control Plane (customer deployments, deploys, health)
+      source_code_path: .
+      config:
+        command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+          - name: ENVIRONMENT
+            value: production
+          - name: LAKEBASE_INSTANCE
+            value: ${var.lakebase_instance}
+          # Databricks Apps has no separate release step, so migrate on start.
+          # Tables are created by the app's own identity, which therefore owns them.
+          - name: AUTO_MIGRATE
+            value: "true"
+          - name: GITHUB_REPO
+            value: ${var.github_repo}
+          - name: ADMIN_API_KEY
+            value_from: admin-api-key
+          - name: GITHUB_TOKEN
+            value_from: github-token
+      resources:
+        - name: database
+          database:
+            instance_name: ${resources.database_instances.control_plane_db.name}
+            database_name: databricks_postgres
+            permission: CAN_CONNECT_AND_CREATE
+        # Secret ACLs are per scope: the app gets READ on the whole scope.
+        - name: admin-api-key
+          secret:
+            scope: ${var.secret_scope}
+            key: admin-api-key
+            permission: READ
+        - name: github-token
+          secret:
+            scope: ${var.secret_scope}
+            key: github-token
+            permission: READ
+      # Who may get through the Apps proxy at all. Every endpoint still demands
+      # the admin key or a deployment token on top of this.
+      permissions:
+        - service_principal_name: ${var.deployer_sp}
+          level: CAN_USE
+        - service_principal_name: ${var.heartbeat_sp}
+          level: CAN_USE
+
+targets:
+  prod:
+    mode: production
+    default: true
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}

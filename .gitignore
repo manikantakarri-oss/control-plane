@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Local config and data
+.env
+.env.local
+*.db
+*.sqlite
+
+# Databricks bundle state
+.databricks/
+
+# Editor / tool caches
+.sf/
+.vscode/
+.idea/
+
+# UI build artefacts. data-plane/web/ (the static export FastAPI serves) is
+# deliberately NOT ignored: bundle sync skips ignored files, so it must be
+# present for `databricks bundle deploy` to ship the UI.
+data-plane/ui/node_modules/
+data-plane/ui/.next/
+data-plane/ui/out/
+data-plane/ui/tsconfig.tsbuildinfo

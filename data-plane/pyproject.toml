@@ -1,0 +1,18 @@
+[project]
+name = "agent-portal"
+version = "1.0.0"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["ui", "web"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+# B008: FastAPI's Body(...)/Header(...) default arguments are the documented idiom.
+ignore = ["B008"]

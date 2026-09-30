@@ -1,0 +1,166 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* One palette, defined light-first, with the dark values swapped in by media
+   query so the portal follows whatever the viewer's OS is set to. */
+:root {
+  /* MediaMint palette, read from their own theme stylesheet at
+     mediamint.com/wp-content/themes/mediamint/style.css:
+       #00b5b0  brand teal        (the pill buttons and links on their site)
+       #6bc6b5  lighter mint
+       #058ea8  deeper teal, used for hover
+       #212321  near-black ink
+       #f5f2f2  warm off-white ground
+       #667085  muted text
+     An earlier pass used #1863dc, which is a stray colour from an embedded
+     third-party block on their homepage, not the brand. */
+  --canvas: #f5f2f2;
+  --surface: #ffffff;
+  --line: #e8e8e4;
+  --ink: #212321;
+  --ink-dim: #3f3f42;
+  --ink-faint: #667085;
+  --brand: #00b5b0;
+  --brand-ink: #ffffff;
+  --brand-deep: #058ea8;
+  --brand-soft: #e3f6f4;
+  --mint: #6bc6b5;
+  --ok: #0f7a56;
+  --warn-bg: #fdf4e3;
+  --warn-line: #d98d1c;
+  --err: #b3261e;
+  --err-bg: #fdecea;
+  /* Chart marks get their own step, validated against their surface by
+     scripts/validate_palette.js. The UI brand #00b5b0 only WARNs on contrast
+     against white, so charts use the deeper teal, which passes every check. */
+  --chart-1: #058ea8;
+  --chart-on: #ffffff;
+}
+/* Follow the OS unless the viewer has explicitly asked for light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0f1413;
+    --surface: #161c1b;
+    --line: #253130;
+    --ink: #eef2f1;
+    --ink-dim: #a9b4b2;
+    --ink-faint: #8a9694;
+    --brand: #2ecfc7;
+    --brand-ink: #06110f;
+    --brand-deep: #00b5b0;
+    --brand-soft: #10312e;
+    --mint: #6bc6b5;
+    --ok: #45c48c;
+    --warn-bg: #2a2314;
+    --warn-line: #d98d1c;
+    --err: #ff9b93;
+    --err-bg: #33201e;
+  /* Selected for the dark surface, not flipped: #2ecfc7 failed the lightness
+     band (0.775), #0fa39c passes every check against #161c1b. */
+  --chart-1: #0fa39c;
+  --chart-on: #06110f;
+  }
+}
+
+:root[data-theme="dark"] {
+  --canvas: #0f1413;
+  --surface: #161c1b;
+  --line: #253130;
+  --ink: #eef2f1;
+  --ink-dim: #a9b4b2;
+  --ink-faint: #8a9694;
+  --brand: #2ecfc7;
+  --brand-ink: #06110f;
+  --brand-deep: #00b5b0;
+  --brand-soft: #10312e;
+  --mint: #6bc6b5;
+  --ok: #45c48c;
+  --warn-bg: #2a2314;
+  --warn-line: #d98d1c;
+  --err: #ff9b93;
+  --err-bg: #33201e;
+  /* Selected for the dark surface, not flipped: #2ecfc7 failed the lightness
+     band (0.775), #0fa39c passes every check against #161c1b. */
+  --chart-1: #0fa39c;
+  --chart-on: #06110f;
+}
+
+html, body { background: var(--canvas); color: var(--ink); }
+/* Tells the browser which way to paint form controls and scrollbars. */
+:root { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+}
+body {
+  /* Inter is what MediaMint uses for body text. Their headings are Roc
+     Grotesk, which is a licensed font we cannot ship, so Inter carries both
+     at a heavier weight. */
+  font-family: var(--font-inter), ui-sans-serif, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { letter-spacing: -0.015em; }
+
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition;
+  }
+  .btn-primary { background: var(--brand); color: var(--brand-ink); }
+  .btn-primary:hover { background: var(--brand-deep); }
+  .btn-primary:disabled { opacity: .5; }
+  .btn-quiet {
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    background: transparent;
+  }
+  .btn-quiet:hover { color: var(--ink); }
+  .btn-quiet:disabled { opacity: .5; }
+  .field {
+    background: var(--canvas);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    @apply rounded-lg px-3 py-2 text-sm w-full;
+  }
+  .field:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+  .tag {
+    @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium;
+    background: var(--brand-soft);
+    color: var(--ink-dim);
+  }
+  .muted { color: var(--ink-dim); }
+  .faint { color: var(--ink-faint); }
+  .notice {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn-line);
+    @apply rounded-md px-3.5 py-3 text-sm;
+  }
+  .error {
+    background: var(--err-bg);
+    color: var(--err);
+    @apply rounded-lg px-3.5 py-3 text-sm;
+  }
+}
+
+@layer components {
+  /* Radix sets data-state="active"; keep the styling in CSS so the active
+     state can actually win (an inline style would beat a Tailwind variant). */
+  .tab {
+    @apply whitespace-nowrap rounded-lg px-3.5 py-2 text-sm transition;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    background: transparent;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab[data-state="active"] {
+    color: var(--ink);
+    font-weight: 600;
+    border-color: var(--brand);
+    background: var(--brand-soft);
+  }
+}

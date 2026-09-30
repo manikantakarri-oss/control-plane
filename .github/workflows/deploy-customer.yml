@@ -1,0 +1,149 @@
+# Deploys the Data Plane (Agent Portal) into one customer's Databricks workspace.
+#
+# Normally started by the Control Plane (POST /api/v1/deployments/{id}/deploy),
+# which fills in every input and receives progress back. It can also be run by
+# hand from the Actions tab; leave deploy_run_id empty in that case.
+#
+# Setup (once per repository), Settings -> Secrets and variables -> Actions:
+#   CONTROL_PLANE_URL        repository secret
+#   CONTROL_PLANE_ADMIN_KEY  repository secret
+# and, when the Control Plane is hosted as a Databricks App (its proxy only
+# admits Databricks OAuth tokens for the provider workspace):
+#   CONTROL_PLANE_OAUTH_HOST       provider workspace URL
+#   CONTROL_PLANE_CLIENT_ID/SECRET provider SP this workflow calls the Control Plane as
+#   HEARTBEAT_CLIENT_ID/SECRET     provider SP written into each customer for heartbeats
+# Both SPs need only CAN_USE on the Control Plane app.
+#
+# Setup (once per customer), Settings -> Environments -> New environment,
+# named e.g. "acme" (the deployment's github_environment), with secrets:
+#   DATABRICKS_HOST          https://<customer-workspace>
+#   DATABRICKS_CLIENT_ID     service principal the customer created for you
+#   DATABRICKS_CLIENT_SECRET its OAuth secret
+# Add "Required reviewers" on the environment to gate every deploy on approval.
+
+name: Deploy customer
+run-name: "${{ inputs.mode }} ${{ inputs.app_name }} -> ${{ inputs.github_environment }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_id:
+        description: Control Plane deployment id
+        required: true
+        type: string
+      github_environment:
+        description: GitHub Environment holding this customer's Databricks credentials
+        required: true
+        type: string
+      mode:
+        description: "onboard = issue credentials + deploy; upgrade = deploy code only"
+        required: true
+        type: choice
+        options: [upgrade, onboard]
+        default: upgrade
+      app_name:
+        description: Databricks App name
+        type: string
+        default: agent-portal
+      restart:
+        description: Restart the app afterwards (needed after a scope change)
+        type: string
+        default: "false"
+      deploy_run_id:
+        description: Control Plane deploy run id (set by the Control Plane)
+        type: string
+        default: ""
+
+# One deploy per customer deployment at a time; never cancel a deploy midway.
+concurrency:
+  group: deploy-${{ inputs.deployment_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.github_environment }}
+    env:
+      # Inputs are passed through env, never interpolated into scripts.
+      DEPLOYMENT_ID: ${{ inputs.deployment_id }}
+      MODE: ${{ inputs.mode }}
+      APP_NAME: ${{ inputs.app_name }}
+      RESTART: ${{ inputs.restart }}
+      DEPLOY_RUN_ID: ${{ inputs.deploy_run_id }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      CONTROL_PLANE_URL: ${{ secrets.CONTROL_PLANE_URL }}
+      CONTROL_PLANE_ADMIN_KEY: ${{ secrets.CONTROL_PLANE_ADMIN_KEY }}
+      CONTROL_PLANE_OAUTH_HOST: ${{ secrets.CONTROL_PLANE_OAUTH_HOST }}
+      CONTROL_PLANE_CLIENT_ID: ${{ secrets.CONTROL_PLANE_CLIENT_ID }}
+      CONTROL_PLANE_CLIENT_SECRET: ${{ secrets.CONTROL_PLANE_CLIENT_SECRET }}
+      HEARTBEAT_CLIENT_ID: ${{ secrets.HEARTBEAT_CLIENT_ID }}
+      HEARTBEAT_CLIENT_SECRET: ${{ secrets.HEARTBEAT_CLIENT_SECRET }}
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate inputs
+        run: |
+          [[ "$DEPLOYMENT_ID" =~ ^[A-Za-z0-9-]{1,64}$ ]] || { echo "bad deployment_id"; exit 1; }
+          [[ "$APP_NAME" =~ ^[a-z0-9][a-z0-9-]{1,98}[a-z0-9]$ ]] || { echo "bad app_name"; exit 1; }
+          [[ -z "$DEPLOY_RUN_ID" || "$DEPLOY_RUN_ID" =~ ^[A-Za-z0-9-]{1,64}$ ]] || { echo "bad deploy_run_id"; exit 1; }
+          [[ "$RESTART" == "true" || "$RESTART" == "false" ]] || { echo "bad restart"; exit 1; }
+          for v in CONTROL_PLANE_URL CONTROL_PLANE_ADMIN_KEY DATABRICKS_HOST DATABRICKS_CLIENT_ID DATABRICKS_CLIENT_SECRET; do
+            [ -n "${!v}" ] || { echo "missing secret $v (repository or environment '${{ inputs.github_environment }}')"; exit 1; }
+          done
+
+      - name: Control Plane token
+        # Obtained once and masked here; later steps pick it up from the env.
+        if: env.CONTROL_PLANE_CLIENT_ID != ''
+        run: |
+          source scripts/lib.sh
+          tok=$(oauth_token "$CONTROL_PLANE_OAUTH_HOST" "$CONTROL_PLANE_CLIENT_ID" "$CONTROL_PLANE_CLIENT_SECRET")
+          echo "::add-mask::$tok"
+          echo "CONTROL_PLANE_BEARER=$tok" >> "$GITHUB_ENV"
+
+      - name: Report running
+        if: env.DEPLOY_RUN_ID != ''
+        run: |
+          source scripts/lib.sh
+          cp_api POST "/api/v1/deploy-runs/$DEPLOY_RUN_ID/status" \
+            "{\"status\":\"running\",\"run_url\":\"$RUN_URL\"}" > /dev/null
+
+      - uses: databricks/setup-cli@main
+
+      - name: Verify target workspace
+        # Stop before touching anything if this environment's credentials reach
+        # a different workspace than the Control Plane has on record.
+        run: |
+          source scripts/lib.sh
+          EXPECTED=$(cp_api GET "/api/v1/deployments/$DEPLOYMENT_ID" | json "['workspace_host']")
+          if [ "$(normalise_host "$DATABRICKS_HOST")" != "$(normalise_host "$EXPECTED")" ]; then
+            echo "::error::environment credentials reach $DATABRICKS_HOST but deployment is registered for $EXPECTED"
+            exit 1
+          fi
+          databricks current-user me -o json | json "['userName']"
+
+      - name: Provision Control Plane credentials
+        if: inputs.mode == 'onboard'
+        run: scripts/provision-credentials.sh --deployment-id "$DEPLOYMENT_ID"
+
+      - name: Deploy
+        run: |
+          args=(--app-name "$APP_NAME")
+          [ "$RESTART" = "true" ] && args+=(--restart)
+          scripts/deploy.sh "${args[@]}"
+
+      - name: Report result
+        if: always() && env.DEPLOY_RUN_ID != ''
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          source scripts/lib.sh
+          if [ "$JOB_STATUS" = "success" ]; then s=succeeded; d="deployed $GITHUB_SHA"; else s=failed; d="job $JOB_STATUS; see run log"; fi
+          cp_api POST "/api/v1/deploy-runs/$DEPLOY_RUN_ID/status" \
+            "{\"status\":\"$s\",\"run_url\":\"$RUN_URL\",\"detail\":\"$d\"}" > /dev/null
